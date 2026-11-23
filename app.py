@@ -234,7 +234,7 @@ def engineering_knowledge_answer(question: str, frame: pd.DataFrame) -> str:
 # ----------------------------- Sidebar -----------------------------
 with st.sidebar:
     st.markdown('## 🛢️ AI DRILLING<br><span style="color:#ffad4d">INTELLIGENCE</span>',unsafe_allow_html=True)
-    st.caption('ADVANCED WELL OPERATIONS ANALYTICS')
+    st.caption('ADVANCED WELL OPERATIONS ANALYTICS · BY ALI SOBHY')
     uploaded=st.file_uploader('Upload drilling data',type=['csv','gz','xlsx','xls'],help='CSV or Excel with a timestamp and drilling measurements.')
     if 'data' not in st.session_state or uploaded is not None:
         try:
@@ -585,4 +585,4 @@ elif page=='Reports & Export':
     st.caption('PDF export can be added as a report template extension. Excel export is enabled in this version.')
 
 st.markdown('---')
-st.markdown('<div class="small-note">AI Drilling Intelligence · Demonstration dataset generated for analytics and software testing; not field measurements · Validate units, sensor quality, model performance and operational limits before field application.</div>',unsafe_allow_html=True)
+st.markdown('<div class="small-note">AI Drilling Intelligence · Developed by Ali Sobhy · © 2026 · Demonstration dataset generated for analytics and software testing; not field measurements · Validate units, sensor quality, model performance and operational limits before field application.</div>',unsafe_allow_html=True)
