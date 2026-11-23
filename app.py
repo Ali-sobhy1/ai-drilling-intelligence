@@ -312,28 +312,28 @@ if page=='Executive Overview':
         st.markdown('#### ROP trend')
         if has(data,'date') and has(data,'rop'):
             plot_data=_chart_sample(data,8000); fig=px.line(plot_data,x=COL['date'],y=COL['rop'],color_discrete_sequence=['#27c3b5'],labels={COL['date']:'Time',COL['rop']:'ROP (m/h)'})
-            st.plotly_chart(chart_layout(fig,330),width='stretch')
+            _plotly_chart(chart_layout(fig,330),width='stretch')
         elif has(data,'depth') and has(data,'rop'):
-            plot_data=_chart_sample(data,8000); fig=px.scatter(plot_data,x=COL['depth'],y=COL['rop'],opacity=.45); st.plotly_chart(chart_layout(fig,330),width='stretch')
+            plot_data=_chart_sample(data,8000); fig=px.scatter(plot_data,x=COL['depth'],y=COL['rop'],opacity=.45); _plotly_chart(chart_layout(fig,330),width='stretch')
     with right:
         st.markdown('#### Data quality signals')
         q=[]
         for k in ['rop','wob','flow','rpm','torque','spp']:
             if has(data,k): q.append({'Parameter':k.upper(),'Zero %':100*(data[COL[k]].fillna(0)==0).mean(),'Missing %':100*data[COL[k]].isna().mean()})
         if q:
-            qdf=pd.DataFrame(q); fig=px.bar(qdf,x='Parameter',y='Zero %',color='Zero %',color_continuous_scale='Tealgrn',text_auto='.1f'); st.plotly_chart(chart_layout(fig,330),width='stretch')
+            qdf=pd.DataFrame(q); fig=px.bar(qdf,x='Parameter',y='Zero %',color='Zero %',color_continuous_scale='Tealgrn',text_auto='.1f'); _plotly_chart(chart_layout(fig,330),width='stretch')
     feat_left,feat_right=st.columns(2)
     with feat_left:
         if 'Lithology_Class' in data.columns:
             st.markdown('#### Lithology distribution')
             lith=data['Lithology_Class'].fillna('Unclassified').value_counts().rename_axis('Lithology').reset_index(name='Observations')
             fig=px.bar(lith,x='Lithology',y='Observations',color='Lithology',color_discrete_sequence=['#ff9d32','#32c6df','#43d6a0','#9b8cff','#e56f91'])
-            st.plotly_chart(chart_layout(fig,310),width='stretch')
+            _plotly_chart(chart_layout(fig,310),width='stretch')
     with feat_right:
         if 'Dysfunction_Risk_Score' in data.columns:
             st.markdown('#### Dysfunction screening score distribution')
             plot_data=_chart_sample(data,8000); fig=px.histogram(plot_data,x='Dysfunction_Risk_Score',nbins=35,color_discrete_sequence=['#ff9d32'])
-            st.plotly_chart(chart_layout(fig,310),width='stretch')
+            _plotly_chart(chart_layout(fig,310),width='stretch')
     st.subheader('Dataset readiness and engineering notes')
     notes=[]
     if has(data,'rop'):
@@ -370,7 +370,7 @@ elif page=='Data Explorer':
             xcol=COL['date'] if has(filtered,'date') else (COL['depth'] if has(filtered,'depth') else None)
             if xcol:
                 plot_data=_chart_sample(filtered,12000); long=plot_data[[xcol]+selected].melt(id_vars=xcol,var_name='Parameter',value_name='Value')
-                fig=px.line(long,x=xcol,y='Value',color='Parameter'); st.plotly_chart(chart_layout(fig,430),width='stretch')
+                fig=px.line(long,x=xcol,y='Value',color='Parameter'); _plotly_chart(chart_layout(fig,430),width='stretch')
         st.markdown('#### Statistical profile')
         _safe_dataframe(filtered[numeric].describe().T.style.format('{:,.3f}'),width='stretch')
     st.markdown('#### Data preview')
@@ -401,10 +401,10 @@ elif page=='ROP Optimization':
             st.caption(f"{saved['name']} · chronological 80/20 split · {m['Train rows']:,} train / {m['Test rows']:,} test rows")
             p=saved['preds'].reset_index(drop=True).reset_index(names='Test observation')
             fig=go.Figure(); fig.add_trace(go.Scatter(x=p['Test observation'],y=p['Actual ROP'],mode='lines',name='Actual')); fig.add_trace(go.Scatter(x=p['Test observation'],y=p['Predicted ROP'],mode='lines',name='Predicted'))
-            st.plotly_chart(chart_layout(fig,330),width='stretch')
+            _plotly_chart(chart_layout(fig,330),width='stretch')
             imp=get_model_importance(saved['model'],saved['features'],saved['Xte'],saved['yte'])
             if not imp.empty:
-                fig=px.bar(imp.sort_values('Importance'),x='Importance',y='Feature',orientation='h',color='Importance',color_continuous_scale='Teal'); st.plotly_chart(chart_layout(fig,280),width='stretch')
+                fig=px.bar(imp.sort_values('Importance'),x='Importance',y='Feature',orientation='h',color='Importance',color_continuous_scale='Teal'); _plotly_chart(chart_layout(fig,280),width='stretch')
         else: st.info('Train a model to see evaluation metrics, predictions and feature importance.')
     if st.session_state.get('rop_model'):
         saved=st.session_state.rop_model
@@ -432,7 +432,7 @@ elif page=='ROP Optimization':
                     row=other.copy(); row[COL['wob']]=w; row[COL['rpm']]=r; grid.append(row)
             z=model.predict(pd.DataFrame(grid)); zz=z.reshape(len(wvals),len(rvals))
             fig=go.Figure(data=go.Contour(x=rvals,y=wvals,z=zz,colorscale='Viridis',colorbar_title='ROP m/h'))
-            fig.update_layout(xaxis_title='Rotary speed (rpm)',yaxis_title='WOB (Klb)'); st.plotly_chart(chart_layout(fig,430),width='stretch')
+            fig.update_layout(xaxis_title='Rotary speed (rpm)',yaxis_title='WOB (Klb)'); _plotly_chart(chart_layout(fig,430),width='stretch')
 
 # ----------------------------- Dysfunction intelligence -----------------------------
 elif page=='Dysfunction Intelligence':
@@ -449,7 +449,7 @@ elif page=='Dysfunction Intelligence':
         if 'Dysfunction_Screening_Status' in data.columns:
             counts=data['Dysfunction_Screening_Status'].fillna('Unclassified').value_counts().rename_axis('Screening status').reset_index(name='Observations')
             fig=px.bar(counts,x='Screening status',y='Observations',color='Screening status',color_discrete_sequence=['#ff9d32','#32c6df','#43d6a0','#9b8cff'])
-            st.plotly_chart(chart_layout(fig,300),width='stretch')
+            _plotly_chart(chart_layout(fig,300),width='stretch')
         st.caption('These are pre-computed demonstration screening indicators. They are not validated downhole event labels or confirmed diagnoses.')
     keys=[k for k in ['rop','wob','rpm','torque','hookload','spp','flow','depth'] if has(data,k)]
     default=[k for k in ['rop','wob','rpm','torque','hookload','spp','flow'] if k in keys]
@@ -470,7 +470,7 @@ elif page=='Dysfunction Intelligence':
         xcol=COL['date'] if has(out,'date') else (COL['depth'] if has(out,'depth') else None)
         if xcol and has(out,'rop'):
             fig=px.scatter(out,x=xcol,y=COL['rop'],color='Anomaly',color_discrete_map={True:'#ff6b6b',False:'#27c3b5'},opacity=.65,hover_data=['Anomaly score'])
-            st.plotly_chart(chart_layout(fig,380),width='stretch')
+            _plotly_chart(chart_layout(fig,380),width='stretch')
         st.markdown('#### Highest anomaly scores')
         _safe_dataframe(out.nlargest(100,'Anomaly score'),width='stretch')
         st.download_button('Download anomaly results',out.to_csv(index=False).encode(),file_name='drilling_anomaly_results.csv',mime='text/csv')
@@ -481,7 +481,7 @@ elif page=='Dysfunction Intelligence':
             if has(data,k): d[f'{COL[k]} rolling std'] = d[COL[k]].rolling('5min',min_periods=5).std()
         pick=[c for c in d.columns if 'rolling std' in c]
         if pick:
-            sel=st.selectbox('Select variability indicator',pick); fig=px.line(d.reset_index(),x=COL['date'],y=sel); st.plotly_chart(chart_layout(fig,300),width='stretch')
+            sel=st.selectbox('Select variability indicator',pick); fig=px.line(d.reset_index(),x=COL['date'],y=sel); _plotly_chart(chart_layout(fig,300),width='stretch')
 
 # ----------------------------- Predictive analytics -----------------------------
 elif page=='Predictive Analytics':
@@ -505,7 +505,7 @@ elif page=='Predictive Analytics':
             st.success('Chronological time-series model trained.')
     if 'ts_result' in st.session_state:
         r=st.session_state.ts_result; a,b,c=st.columns(3); a.metric('MAE',f"{r['mae']:.3f}"); b.metric('RMSE',f"{r['rmse']:.3f}"); c.metric('R²',f"{r['r2']:.3f}")
-        fig=go.Figure(); fig.add_trace(go.Scatter(y=r['actual'].values,name='Actual',mode='lines')); fig.add_trace(go.Scatter(y=r['pred'],name='Predicted',mode='lines')); st.plotly_chart(chart_layout(fig,370),width='stretch')
+        fig=go.Figure(); fig.add_trace(go.Scatter(y=r['actual'].values,name='Actual',mode='lines')); fig.add_trace(go.Scatter(y=r['pred'],name='Predicted',mode='lines')); _plotly_chart(chart_layout(fig,370),width='stretch')
         st.caption(f"Target: {r['target']} · one-step-ahead prediction using prior samples. Test partition is chronological.")
 
 # ----------------------------- Digital twin -----------------------------
@@ -553,11 +553,11 @@ elif page=='Advanced Data Science':
     if len(chosen)>=2:
         clean=data[chosen].replace([np.inf,-np.inf],np.nan).dropna()
         st.markdown('#### Correlation matrix')
-        corr=clean.corr(method='pearson'); fig=px.imshow(corr,text_auto='.2f',color_continuous_scale='RdBu_r',zmin=-1,zmax=1,aspect='auto'); st.plotly_chart(chart_layout(fig,520),width='stretch')
+        corr=clean.corr(method='pearson'); fig=px.imshow(corr,text_auto='.2f',color_continuous_scale='RdBu_r',zmin=-1,zmax=1,aspect='auto'); _plotly_chart(chart_layout(fig,520),width='stretch')
         st.markdown('#### PCA – dominant operating patterns')
         scaled=StandardScaler().fit_transform(clean); pcs=PCA(n_components=2,random_state=42).fit_transform(scaled)
         pcdf=pd.DataFrame({'PC1':pcs[:,0],'PC2':pcs[:,1]})
-        fig=px.scatter(pcdf.sample(min(6000,len(pcdf)),random_state=42),x='PC1',y='PC2',opacity=.5); st.plotly_chart(chart_layout(fig,390),width='stretch')
+        fig=px.scatter(pcdf.sample(min(6000,len(pcdf)),random_state=42),x='PC1',y='PC2',opacity=.5); _plotly_chart(chart_layout(fig,390),width='stretch')
         st.markdown('#### K-Means operating-pattern discovery')
         k=st.slider('Number of clusters',2,8,4)
         if st.button('Run K-Means clustering'):
