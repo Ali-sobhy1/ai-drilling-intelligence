@@ -475,13 +475,28 @@ elif page=='Digital Twin Simulator':
         st.info('Train an ROP model in the ROP Optimization module first.'); st.stop()
     model=saved['model']; Xtr=saved['Xtr']; features=list(Xtr.columns)
     st.markdown('#### Configure a simulated operating point')
-    scenario={}; cols=st.columns(3)
+    scenario={}; input_errors=[]; cols=st.columns(3)
     for i,f in enumerate(features):
         lo=float(Xtr[f].quantile(.05)); hi=float(Xtr[f].quantile(.95)); med=float(Xtr[f].median())
         if not np.isfinite(lo) or not np.isfinite(hi) or not np.isfinite(med):
             lo, hi, med = 0.0, 1.0, 0.5
-        with cols[i%3]: scenario[f]=st.number_input(f,min_value=lo,max_value=hi if hi>lo else lo+1,value=float(np.clip(med,lo,hi if hi>lo else lo+1)))
-    if st.button('Run digital twin scenario',type='primary'):
+        upper=hi if hi>lo else lo+1
+        default=float(np.clip(med,lo,upper))
+        # Text inputs keep the displayed digits in Western/English form regardless of browser locale.
+        with cols[i%3]:
+            raw_value=st.text_input(f, value=f"{default:.2f}", key=f"digital_twin_input_{i}")
+        try:
+            parsed=float(raw_value.strip().replace(",", ""))
+            if not np.isfinite(parsed):
+                raise ValueError("Enter a finite number.")
+            if parsed < lo or parsed > upper:
+                input_errors.append(f"{f}: enter a value between {lo:.2f} and {upper:.2f}.")
+            scenario[f]=parsed
+        except (TypeError, ValueError):
+            input_errors.append(f"{f}: enter a valid number using English digits and a decimal point.")
+    if input_errors:
+        for error in input_errors: st.error(error)
+    if st.button('Run digital twin scenario',type='primary',disabled=bool(input_errors)):
         prediction=float(model.predict(pd.DataFrame([scenario]))[0]); st.session_state.twin={'input':scenario,'rop':prediction}
     if 'twin' in st.session_state:
         twin=st.session_state.twin; st.metric('Model-estimated ROP',f"{twin['rop']:.2f} m/h")
