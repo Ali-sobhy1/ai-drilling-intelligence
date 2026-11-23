@@ -23,7 +23,23 @@ st.set_page_config(page_title='AI Drilling Intelligence', page_icon='🛢️', l
 # ----------------------------- Theme / helpers -----------------------------
 st.markdown('''<style>
 :root{--bg:#07090d;--panel:#111722;--panel2:#151e2b;--line:#273447;--ink:#edf3fa;--muted:#93a4b8;--orange:#ff9d32;--cyan:#32c6df;--green:#43d6a0}
+/* Force Western/English numeral glyphs throughout the dashboard, independent of browser locale. */
+html,body,.stApp,.stApp *{
+  font-language-override:"ENG" !important;
+  font-variant-numeric:lining-nums tabular-nums !important;
+  font-feature-settings:"locl" 0,"lnum" 1,"tnum" 1 !important;
+}
 .stApp{background:radial-gradient(ellipse at 12% 0%,#182536 0%,#0b1018 38%,#07090d 78%);color:var(--ink)}
+/* Keep numeric controls and rendered numeric values left-to-right with English digits. */
+input,textarea,[data-testid="stMetricValue"],[data-testid="stDataFrame"] *,
+[data-testid="stTable"] *,[data-testid="stPlotlyChart"] svg text,
+[data-testid="stPlotlyChart"] svg tspan{
+  direction:ltr !important;
+  unicode-bidi:isolate !important;
+  font-language-override:"ENG" !important;
+  font-variant-numeric:lining-nums tabular-nums !important;
+  font-feature-settings:"locl" 0,"lnum" 1,"tnum" 1 !important;
+}
 [data-testid="stSidebar"]{background:linear-gradient(180deg,#0a0e15,#0d1420);border-right:1px solid #263346}
 [data-testid="stSidebar"] *{color:#dbe6f2}
 .block-container{padding-top:1.15rem;padding-bottom:2.4rem;max-width:1680px}
