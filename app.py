@@ -368,7 +368,7 @@ elif page=='ROP Optimization':
         saved=st.session_state.rop_model
         st.divider(); st.subheader('Constrained operating scenario explorer')
         st.caption('The scenario explorer searches within the observed training-data envelope. It does not establish safe limits; enter engineering-approved limits before using results.')
-        feature=[COL[k] for k in saved['features']]; model=saved['model']; Xtr=saved['Xtr']
+        model=saved['model']; Xtr=saved['Xtr']; feature=list(Xtr.columns)
         scenario={}
         cols=st.columns(min(3,len(feature)))
         for i,f in enumerate(feature):
@@ -473,7 +473,7 @@ elif page=='Digital Twin Simulator':
     saved=st.session_state.get('rop_model')
     if not saved:
         st.info('Train an ROP model in the ROP Optimization module first.'); st.stop()
-    model=saved['model']; features=[COL[k] for k in saved['features']]; Xtr=saved['Xtr']
+    model=saved['model']; Xtr=saved['Xtr']; features=list(Xtr.columns)
     st.markdown('#### Configure a simulated operating point')
     scenario={}; cols=st.columns(3)
     for i,f in enumerate(features):
