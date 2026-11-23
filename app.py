@@ -25,6 +25,7 @@ st.markdown('''<style>
 :root{--bg:#07090d;--panel:#111722;--panel2:#151e2b;--line:#273447;--ink:#edf3fa;--muted:#93a4b8;--orange:#ff9d32;--cyan:#32c6df;--green:#43d6a0}
 /* Force Western/English numeral glyphs throughout the dashboard, independent of browser locale. */
 html,body,.stApp,.stApp *{
+  font-family:Arial,Helvetica,sans-serif !important;
   font-language-override:"ENG" !important;
   font-variant-numeric:lining-nums tabular-nums !important;
   font-feature-settings:"locl" 0,"lnum" 1,"tnum" 1 !important;
@@ -33,9 +34,12 @@ html,body,.stApp,.stApp *{
 /* Keep numeric controls and rendered numeric values left-to-right with English digits. */
 input,textarea,[data-testid="stMetricValue"],[data-testid="stDataFrame"] *,
 [data-testid="stTable"] *,[data-testid="stPlotlyChart"] svg text,
-[data-testid="stPlotlyChart"] svg tspan{
+[data-testid="stPlotlyChart"] svg tspan,
+[data-testid="stSlider"] *,[data-testid="stNumberInput"] *,
+[data-testid="stDateInput"] *{
   direction:ltr !important;
   unicode-bidi:isolate !important;
+  font-family:Arial,Helvetica,sans-serif !important;
   font-language-override:"ENG" !important;
   font-variant-numeric:lining-nums tabular-nums !important;
   font-feature-settings:"locl" 0,"lnum" 1,"tnum" 1 !important;
@@ -137,6 +141,25 @@ def chart_layout(fig, height=360):
     fig.update_xaxes(gridcolor='rgba(150,170,190,.12)',zerolinecolor='rgba(150,170,190,.15)')
     fig.update_yaxes(gridcolor='rgba(150,170,190,.12)',zerolinecolor='rgba(150,170,190,.15)')
     return fig
+
+def _plotly_chart(fig, *args, **kwargs):
+    """Render every Plotly visualization with an explicit English locale."""
+    config=kwargs.pop('config', {}) or {}
+    config.setdefault('locale', 'en')
+    config.setdefault('displaylogo', False)
+    return st.plotly_chart(fig, *args, config=config, **kwargs)
+
+def _english_float_input(label, value, key):
+    """Text-based numeric input avoids browser-locale digit substitution."""
+    raw=st.text_input(label, value=f"{float(value):.2f}", key=key)
+    try:
+        parsed=float(raw.strip().replace(',', ''))
+        if np.isfinite(parsed):
+            return parsed
+    except (TypeError, ValueError):
+        pass
+    st.error(f"{label}: enter a valid number using English digits.")
+    return float(value)
 
 def add_time_features(df, target_col, feature_cols, lags=(1,2,3,5,10)):
     z=df.copy()
@@ -332,8 +355,11 @@ elif page=='Data Explorer':
         filtered=data.copy()
         if has(data,'depth'):
             lo,hi=float(data[COL['depth']].min()),float(data[COL['depth']].max())
-            d1,d2=st.columns(2); a=d1.number_input('Minimum hole depth (m)',value=lo); b=d2.number_input('Maximum hole depth (m)',value=hi)
+            d1,d2=st.columns(2)
+            with d1: a=_english_float_input('Minimum hole depth (m)',lo,'filter_min_hole_depth')
+            with d2: b=_english_float_input('Maximum hole depth (m)',hi,'filter_max_hole_depth')
             if a<=b: filtered=filtered[filtered[COL['depth']].between(a,b)]
+            else: st.warning('Minimum hole depth must be less than or equal to maximum hole depth.')
         if has(data,'date') and data[COL['date']].notna().any():
             t1,t2=st.columns(2); start=t1.date_input('Start date',value=data[COL['date']].min().date()); end=t2.date_input('End date',value=data[COL['date']].max().date())
             filtered=filtered[filtered[COL['date']].dt.date.between(start,end)]
