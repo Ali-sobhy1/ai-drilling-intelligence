@@ -73,6 +73,24 @@ def _prepare_data(raw):
         if COL[k] in raw.columns: raw[COL[k]]=pd.to_numeric(raw[COL[k]],errors='coerce')
     return raw
 
+def _safe_dataframe(frame, *args, **kwargs):
+    """Normalize mixed object columns for reliable Arrow serialization in Streamlit."""
+    if isinstance(frame, pd.DataFrame):
+        frame = frame.copy()
+        for col in frame.select_dtypes(include=['object']).columns:
+            non_null_types = {type(v) for v in frame[col].dropna().head(2000)}
+            if len(non_null_types) > 1:
+                frame[col] = frame[col].map(lambda v: str(v) if pd.notna(v) else v)
+    kwargs.setdefault('width', 'stretch')
+    return st.dataframe(frame, *args, **kwargs)
+
+def _chart_sample(frame, max_rows=8000):
+    """Downsample only chart inputs; preserve the original dataset and chronological order."""
+    if len(frame) <= max_rows:
+        return frame
+    positions = np.linspace(0, len(frame)-1, max_rows, dtype=int)
+    return frame.iloc[positions]
+
 def load_data(uploaded=None):
     if uploaded is not None:
         if uploaded.name.lower().endswith('.csv') or uploaded.name.lower().endswith('.csv.gz'):
@@ -254,29 +272,29 @@ if page=='Executive Overview':
     with left:
         st.markdown('#### ROP trend')
         if has(data,'date') and has(data,'rop'):
-            fig=px.line(data,x=COL['date'],y=COL['rop'],color_discrete_sequence=['#27c3b5'],labels={COL['date']:'Time',COL['rop']:'ROP (m/h)'})
-            st.plotly_chart(chart_layout(fig,330),use_container_width=True)
+            plot_data=_chart_sample(data,8000); fig=px.line(plot_data,x=COL['date'],y=COL['rop'],color_discrete_sequence=['#27c3b5'],labels={COL['date']:'Time',COL['rop']:'ROP (m/h)'})
+            st.plotly_chart(chart_layout(fig,330),width='stretch')
         elif has(data,'depth') and has(data,'rop'):
-            fig=px.scatter(data,x=COL['depth'],y=COL['rop'],opacity=.45); st.plotly_chart(chart_layout(fig,330),use_container_width=True)
+            plot_data=_chart_sample(data,8000); fig=px.scatter(plot_data,x=COL['depth'],y=COL['rop'],opacity=.45); st.plotly_chart(chart_layout(fig,330),width='stretch')
     with right:
         st.markdown('#### Data quality signals')
         q=[]
         for k in ['rop','wob','flow','rpm','torque','spp']:
             if has(data,k): q.append({'Parameter':k.upper(),'Zero %':100*(data[COL[k]].fillna(0)==0).mean(),'Missing %':100*data[COL[k]].isna().mean()})
         if q:
-            qdf=pd.DataFrame(q); fig=px.bar(qdf,x='Parameter',y='Zero %',color='Zero %',color_continuous_scale='Tealgrn',text_auto='.1f'); st.plotly_chart(chart_layout(fig,330),use_container_width=True)
+            qdf=pd.DataFrame(q); fig=px.bar(qdf,x='Parameter',y='Zero %',color='Zero %',color_continuous_scale='Tealgrn',text_auto='.1f'); st.plotly_chart(chart_layout(fig,330),width='stretch')
     feat_left,feat_right=st.columns(2)
     with feat_left:
         if 'Lithology_Class' in data.columns:
             st.markdown('#### Lithology distribution')
             lith=data['Lithology_Class'].fillna('Unclassified').value_counts().rename_axis('Lithology').reset_index(name='Observations')
             fig=px.bar(lith,x='Lithology',y='Observations',color='Lithology',color_discrete_sequence=['#ff9d32','#32c6df','#43d6a0','#9b8cff','#e56f91'])
-            st.plotly_chart(chart_layout(fig,310),use_container_width=True)
+            st.plotly_chart(chart_layout(fig,310),width='stretch')
     with feat_right:
         if 'Dysfunction_Risk_Score' in data.columns:
             st.markdown('#### Dysfunction screening score distribution')
-            fig=px.histogram(data,x='Dysfunction_Risk_Score',nbins=35,color_discrete_sequence=['#ff9d32'])
-            st.plotly_chart(chart_layout(fig,310),use_container_width=True)
+            plot_data=_chart_sample(data,8000); fig=px.histogram(plot_data,x='Dysfunction_Risk_Score',nbins=35,color_discrete_sequence=['#ff9d32'])
+            st.plotly_chart(chart_layout(fig,310),width='stretch')
     st.subheader('Dataset readiness and engineering notes')
     notes=[]
     if has(data,'rop'):
@@ -309,12 +327,12 @@ elif page=='Data Explorer':
         if selected:
             xcol=COL['date'] if has(filtered,'date') else (COL['depth'] if has(filtered,'depth') else None)
             if xcol:
-                long=filtered[[xcol]+selected].melt(id_vars=xcol,var_name='Parameter',value_name='Value')
-                fig=px.line(long,x=xcol,y='Value',color='Parameter'); st.plotly_chart(chart_layout(fig,430),use_container_width=True)
+                plot_data=_chart_sample(filtered,12000); long=plot_data[[xcol]+selected].melt(id_vars=xcol,var_name='Parameter',value_name='Value')
+                fig=px.line(long,x=xcol,y='Value',color='Parameter'); st.plotly_chart(chart_layout(fig,430),width='stretch')
         st.markdown('#### Statistical profile')
-        st.dataframe(filtered[numeric].describe().T.style.format('{:,.3f}'),use_container_width=True)
+        _safe_dataframe(filtered[numeric].describe().T.style.format('{:,.3f}'),width='stretch')
     st.markdown('#### Data preview')
-    st.dataframe(filtered.head(500),use_container_width=True,height=320)
+    _safe_dataframe(filtered.head(500),width='stretch',height=320)
     st.download_button('Download filtered data (CSV)',filtered.to_csv(index=False).encode(),file_name='drilling_data_filtered.csv',mime='text/csv')
 
 # ----------------------------- ROP optimization -----------------------------
@@ -341,16 +359,16 @@ elif page=='ROP Optimization':
             st.caption(f"{saved['name']} · chronological 80/20 split · {m['Train rows']:,} train / {m['Test rows']:,} test rows")
             p=saved['preds'].reset_index(drop=True).reset_index(names='Test observation')
             fig=go.Figure(); fig.add_trace(go.Scatter(x=p['Test observation'],y=p['Actual ROP'],mode='lines',name='Actual')); fig.add_trace(go.Scatter(x=p['Test observation'],y=p['Predicted ROP'],mode='lines',name='Predicted'))
-            st.plotly_chart(chart_layout(fig,330),use_container_width=True)
+            st.plotly_chart(chart_layout(fig,330),width='stretch')
             imp=get_model_importance(saved['model'],saved['features'],saved['Xte'],saved['yte'])
             if not imp.empty:
-                fig=px.bar(imp.sort_values('Importance'),x='Importance',y='Feature',orientation='h',color='Importance',color_continuous_scale='Teal'); st.plotly_chart(chart_layout(fig,280),use_container_width=True)
+                fig=px.bar(imp.sort_values('Importance'),x='Importance',y='Feature',orientation='h',color='Importance',color_continuous_scale='Teal'); st.plotly_chart(chart_layout(fig,280),width='stretch')
         else: st.info('Train a model to see evaluation metrics, predictions and feature importance.')
     if st.session_state.get('rop_model'):
         saved=st.session_state.rop_model
         st.divider(); st.subheader('Constrained operating scenario explorer')
         st.caption('The scenario explorer searches within the observed training-data envelope. It does not establish safe limits; enter engineering-approved limits before using results.')
-        feature=saved['features']; model=saved['model']; Xtr=saved['Xtr']
+        feature=[COL[k] for k in saved['features']]; model=saved['model']; Xtr=saved['Xtr']
         scenario={}
         cols=st.columns(min(3,len(feature)))
         for i,f in enumerate(feature):
@@ -372,7 +390,7 @@ elif page=='ROP Optimization':
                     row=other.copy(); row[COL['wob']]=w; row[COL['rpm']]=r; grid.append(row)
             z=model.predict(pd.DataFrame(grid)); zz=z.reshape(len(wvals),len(rvals))
             fig=go.Figure(data=go.Contour(x=rvals,y=wvals,z=zz,colorscale='Viridis',colorbar_title='ROP m/h'))
-            fig.update_layout(xaxis_title='Rotary speed (rpm)',yaxis_title='WOB (Klb)'); st.plotly_chart(chart_layout(fig,430),use_container_width=True)
+            fig.update_layout(xaxis_title='Rotary speed (rpm)',yaxis_title='WOB (Klb)'); st.plotly_chart(chart_layout(fig,430),width='stretch')
 
 # ----------------------------- Dysfunction intelligence -----------------------------
 elif page=='Dysfunction Intelligence':
@@ -389,7 +407,7 @@ elif page=='Dysfunction Intelligence':
         if 'Dysfunction_Screening_Status' in data.columns:
             counts=data['Dysfunction_Screening_Status'].fillna('Unclassified').value_counts().rename_axis('Screening status').reset_index(name='Observations')
             fig=px.bar(counts,x='Screening status',y='Observations',color='Screening status',color_discrete_sequence=['#ff9d32','#32c6df','#43d6a0','#9b8cff'])
-            st.plotly_chart(chart_layout(fig,300),use_container_width=True)
+            st.plotly_chart(chart_layout(fig,300),width='stretch')
         st.caption('These are pre-computed demonstration screening indicators. They are not validated downhole event labels or confirmed diagnoses.')
     keys=[k for k in ['rop','wob','rpm','torque','hookload','spp','flow','depth'] if has(data,k)]
     default=[k for k in ['rop','wob','rpm','torque','hookload','spp','flow'] if k in keys]
@@ -410,9 +428,9 @@ elif page=='Dysfunction Intelligence':
         xcol=COL['date'] if has(out,'date') else (COL['depth'] if has(out,'depth') else None)
         if xcol and has(out,'rop'):
             fig=px.scatter(out,x=xcol,y=COL['rop'],color='Anomaly',color_discrete_map={True:'#ff6b6b',False:'#27c3b5'},opacity=.65,hover_data=['Anomaly score'])
-            st.plotly_chart(chart_layout(fig,380),use_container_width=True)
+            st.plotly_chart(chart_layout(fig,380),width='stretch')
         st.markdown('#### Highest anomaly scores')
-        st.dataframe(out.nlargest(100,'Anomaly score'),use_container_width=True)
+        _safe_dataframe(out.nlargest(100,'Anomaly score'),width='stretch')
         st.download_button('Download anomaly results',out.to_csv(index=False).encode(),file_name='drilling_anomaly_results.csv',mime='text/csv')
     st.divider(); st.subheader('Engineering trend indicators')
     if has(data,'date'):
@@ -421,7 +439,7 @@ elif page=='Dysfunction Intelligence':
             if has(data,k): d[f'{COL[k]} rolling std'] = d[COL[k]].rolling('5min',min_periods=5).std()
         pick=[c for c in d.columns if 'rolling std' in c]
         if pick:
-            sel=st.selectbox('Select variability indicator',pick); fig=px.line(d.reset_index(),x=COL['date'],y=sel); st.plotly_chart(chart_layout(fig,300),use_container_width=True)
+            sel=st.selectbox('Select variability indicator',pick); fig=px.line(d.reset_index(),x=COL['date'],y=sel); st.plotly_chart(chart_layout(fig,300),width='stretch')
 
 # ----------------------------- Predictive analytics -----------------------------
 elif page=='Predictive Analytics':
@@ -445,7 +463,7 @@ elif page=='Predictive Analytics':
             st.success('Chronological time-series model trained.')
     if 'ts_result' in st.session_state:
         r=st.session_state.ts_result; a,b,c=st.columns(3); a.metric('MAE',f"{r['mae']:.3f}"); b.metric('RMSE',f"{r['rmse']:.3f}"); c.metric('R²',f"{r['r2']:.3f}")
-        fig=go.Figure(); fig.add_trace(go.Scatter(y=r['actual'].values,name='Actual',mode='lines')); fig.add_trace(go.Scatter(y=r['pred'],name='Predicted',mode='lines')); st.plotly_chart(chart_layout(fig,370),use_container_width=True)
+        fig=go.Figure(); fig.add_trace(go.Scatter(y=r['actual'].values,name='Actual',mode='lines')); fig.add_trace(go.Scatter(y=r['pred'],name='Predicted',mode='lines')); st.plotly_chart(chart_layout(fig,370),width='stretch')
         st.caption(f"Target: {r['target']} · one-step-ahead prediction using prior samples. Test partition is chronological.")
 
 # ----------------------------- Digital twin -----------------------------
@@ -455,7 +473,7 @@ elif page=='Digital Twin Simulator':
     saved=st.session_state.get('rop_model')
     if not saved:
         st.info('Train an ROP model in the ROP Optimization module first.'); st.stop()
-    model=saved['model']; features=saved['features']; Xtr=saved['Xtr']
+    model=saved['model']; features=[COL[k] for k in saved['features']]; Xtr=saved['Xtr']
     st.markdown('#### Configure a simulated operating point')
     scenario={}; cols=st.columns(3)
     for i,f in enumerate(features):
@@ -478,11 +496,11 @@ elif page=='Advanced Data Science':
     if len(chosen)>=2:
         clean=data[chosen].replace([np.inf,-np.inf],np.nan).dropna()
         st.markdown('#### Correlation matrix')
-        corr=clean.corr(method='pearson'); fig=px.imshow(corr,text_auto='.2f',color_continuous_scale='RdBu_r',zmin=-1,zmax=1,aspect='auto'); st.plotly_chart(chart_layout(fig,520),use_container_width=True)
+        corr=clean.corr(method='pearson'); fig=px.imshow(corr,text_auto='.2f',color_continuous_scale='RdBu_r',zmin=-1,zmax=1,aspect='auto'); st.plotly_chart(chart_layout(fig,520),width='stretch')
         st.markdown('#### PCA – dominant operating patterns')
         scaled=StandardScaler().fit_transform(clean); pcs=PCA(n_components=2,random_state=42).fit_transform(scaled)
         pcdf=pd.DataFrame({'PC1':pcs[:,0],'PC2':pcs[:,1]})
-        fig=px.scatter(pcdf.sample(min(6000,len(pcdf)),random_state=42),x='PC1',y='PC2',opacity=.5); st.plotly_chart(chart_layout(fig,390),use_container_width=True)
+        fig=px.scatter(pcdf.sample(min(6000,len(pcdf)),random_state=42),x='PC1',y='PC2',opacity=.5); st.plotly_chart(chart_layout(fig,390),width='stretch')
         st.markdown('#### K-Means operating-pattern discovery')
         k=st.slider('Number of clusters',2,8,4)
         if st.button('Run K-Means clustering'):
@@ -491,7 +509,7 @@ elif page=='Advanced Data Science':
             st.session_state.clusters=result
             st.success('Clustering completed. Cluster labels are statistical groups, not confirmed drilling activities.')
         if 'clusters' in st.session_state:
-            cl=st.session_state.clusters; st.dataframe(cl.groupby('Cluster').mean(numeric_only=True).round(3),use_container_width=True)
+            cl=st.session_state.clusters; _safe_dataframe(cl.groupby('Cluster').mean(numeric_only=True).round(3),width='stretch')
             st.download_button('Download cluster assignments',cl.to_csv(index=False).encode(),file_name='drilling_clusters.csv',mime='text/csv')
 
 # ----------------------------- AI assistant -----------------------------
@@ -522,8 +540,8 @@ elif page=='Reports & Export':
         quality=pd.DataFrame({'Missing':data.isna().sum(),'Missing %':100*data.isna().mean(),'Unique values':data.nunique(),'Zero count':[int((data[c]==0).sum()) if pd.api.types.is_numeric_dtype(data[c]) else np.nan for c in data.columns]})
         st.session_state.report_summary=summary; st.session_state.report_quality=quality
     if 'report_summary' in st.session_state:
-        st.markdown('**Statistical summary**'); st.dataframe(st.session_state.report_summary,use_container_width=True)
-        st.markdown('**Data quality report**'); st.dataframe(st.session_state.report_quality,use_container_width=True)
+        st.markdown('**Statistical summary**'); _safe_dataframe(st.session_state.report_summary,width='stretch')
+        st.markdown('**Data quality report**'); _safe_dataframe(st.session_state.report_quality,width='stretch')
         out=io.BytesIO()
         with pd.ExcelWriter(out,engine='openpyxl') as writer:
             data.to_excel(writer,index=False,sheet_name='Source Data')
